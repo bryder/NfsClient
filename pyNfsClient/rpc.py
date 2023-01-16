@@ -129,22 +129,34 @@ class RPC(object):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.settimeout(self.timeout)
         # if we are running as root, use a source port between 500 and 1024 (NFS security options...)
+        if os.getuid() == 0:
+            start_port = 500
+            end_port = 1023
+        else:
+            start_port = 1025
+            end_port = 3000
+
         random_port = None
         try:
             i = 0
             while True:
                 try:
-                    random_port = randint(500, 1023)
+                    random_port = randint(start_port, end_port)
                     i += 1
                     self.client.bind(('', random_port))
                     self.client_port = random_port
                     logger.debug("Port %d occupied" % self.client_port)
                     break
-                except:
-                    logger.warning("Socket port binding with %d failed in loop %d, try again." % (random_port, i))
+                except PermissionError as e:
+                    logger.error("Permission denied")
+                    raise e
+                except Exception as e:
+                    logger.warning("Exception: %r - Socket port binding with %d failed in loop %d, try again." %
+                                   (e, random_port, i))
                     continue
         except Exception as e:
             logger.error(e)
+            raise e
 
         self.client.connect((self.host, self.port))
         RPC.connections.append(self)
